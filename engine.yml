@@ -1,0 +1,40 @@
+name: virality-engine
+
+on:
+  schedule:
+    - cron: "37 */2 * * *"     # 02:37, 04:37, 06:37 UTC — μακριά από την αιχμή
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: virality-engine       # never two cycles writing the dataset at once
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Stages 1-4 need no ML libraries, so the runner stays small and fast.
+      - run: pip install pandas openpyxl google-api-python-client
+
+      - name: Run one cycle
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: python youtube_virality_engine.py --once --no-train
+
+      - name: Commit dataset
+        run: |
+          git config user.name "virality-engine"
+          git config user.email "bot@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "cycle $(date -u +%FT%TZ)"
+          git push
