@@ -1,8 +1,9 @@
 name: virality-engine
 
 on:
-  schedule:
-    - cron: "37 */2 * * *"     # 02:37, 04:37, 06:37 UTC — μακριά από την αιχμή
+  # Triggered every 2 hours by cron-job.org via the workflow_dispatch API.
+  # GitHub's own `schedule` was dropped: on free accounts it fired only every
+  # 6-8 hours, which made many 8h/24h/72h checkpoints MISSED.
   workflow_dispatch:
 
 permissions:
