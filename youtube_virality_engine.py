@@ -120,7 +120,7 @@ class Config:
     # ---------- Credentials & storage ----------
     # NEVER hardcode the key here: this file is committed to git, and a key in
     # git history stays there. It is read from the environment / CI secret.
-    api_key: str = os.getenv("YOUTUBE_API_KEY", "AIzaSyB7ahT2azzceBplQFMoUUy5-uibpmWJcuA")
+    api_key: str = os.getenv("YOUTUBE_API_KEY", "")
     excel_path: Path = BASE_DIR / "youtube_predictive_datasetss.xlsx"
     model_dir: Path = BASE_DIR / "models"
     log_path: Path = BASE_DIR / "virality_engine.log"
@@ -140,17 +140,20 @@ class Config:
     # 24 labelled rows produced zero positives. Capping the channel size keeps the
     # ground-truth rule attainable and the dataset learnable.
     max_subscribers: int = 300_000
-    max_search_calls_per_cycle: int = 4          # 100 quota units each -> 400/cycle
+    max_search_calls_per_cycle: int = 6          # 100 quota units each -> 400/cycle
 
     # ---------- Stage 2-4: checkpoint scheduling ----------
     # A cycle runs every 2h, so a checkpoint can never be observed at the exact
     # second. `grace_hours` is how late an observation may be and still count.
     checkpoint_hours: Tuple[int, int, int] = (8, 24, 72)
-    grace_hours: float = 8.0                     # >3h late -> checkpoint MISSED
+    grace_hours: float = 24.0                   # >3h late -> checkpoint MISSED
 
     # ---------- Stage 4: ground-truth rule ("The Teacher") ----------
     viral_views_multiplier: float = 3.0          # final_views >= 3 * subscribers
-    viral_engagement_ratio: float = 0.02         # (likes+comments)/final_views >= 2%
+    # Lowered from 0.02 after phase 2 of the real collection: truly viral videos
+    # reach non-subscribers who rarely like/comment, so a 2% floor rejected 30 of
+    # 37 videos that hit the reach target. 0.3% still filters bot-inflated views.
+    viral_engagement_ratio: float = 0.003        # (likes+comments)/final_views >= 0.3%
 
     # ---------- Stage 5: the PyTorch student ----------
     min_rows_to_train: int = 40                  # below this, training is noise
@@ -918,7 +921,7 @@ def label_ground_truth(client: YouTubeClient, df: pd.DataFrame, now: datetime) -
     """Apply the virality rule to every row that has reached 72 hours.
 
         is_viral = 1  IFF  final_views >= 3 * subscribers
-                     AND  (final_likes + final_comments) / final_views >= 0.02
+                     AND  (final_likes + final_comments) / final_views >= 0.003
 
     The first clause captures *reach beyond the existing audience* (algorithmic
     distribution); the second captures *audience quality* and filters out the
@@ -992,6 +995,32 @@ def label_ground_truth(client: YouTubeClient, df: pd.DataFrame, now: datetime) -
 
     LOG.info("STAGE 4 | Labelled %d rows -> %d viral / %d non-viral (%d dead).",
              viral_count + dud_count, viral_count, dud_count, dead)
+    return df
+
+
+def relabel_existing(df: pd.DataFrame) -> pd.DataFrame:
+    """Re-apply the CURRENT ground-truth rule to every already-labelled row.
+
+    No API calls: it only uses the stored final_views / final_likes /
+    final_comments / subscribers. This keeps old and new rows consistent after
+    the rule's thresholds change.
+    """
+    mask = df["row_status"].astype(str) == "LABELLED"
+    if not mask.any():
+        return df
+    subs = pd.to_numeric(df.loc[mask, "subscribers"], errors="coerce").fillna(0)
+    views = pd.to_numeric(df.loc[mask, "final_views"], errors="coerce").fillna(0)
+    eng = pd.to_numeric(df.loc[mask, "engagement_ratio"], errors="coerce")
+    reach_ok = (subs > 0) & (views >= CFG.viral_views_multiplier * subs)
+    resonance_ok = eng.notna() & (eng >= CFG.viral_engagement_ratio)
+    new_labels = (reach_ok & resonance_ok).astype(int)
+    old_labels = pd.to_numeric(df.loc[mask, "is_viral"], errors="coerce")
+    changed = int((old_labels != new_labels).sum())
+    if changed:
+        df["is_viral"] = df["is_viral"].astype(object)
+        df.loc[mask, "is_viral"] = new_labels
+        LOG.info("STAGE 4 | Re-labelled %d rows with the current rule -> %d viral / %d total.",
+                 changed, int(new_labels.sum()), int(mask.sum()))
     return df
 
 
@@ -1391,6 +1420,7 @@ def run_cycle(client: YouTubeClient, store: ExcelStore, quota: QuotaGuard,
     # ---- STAGE 4: 72h ground truth -------------------------------------------
     try:
         df = label_ground_truth(client, df, utcnow())
+        df = relabel_existing(df)
         df = store.save(df)
     except RuntimeError as err:
         LOG.error("Labelling halted: %s", err)

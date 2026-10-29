@@ -1,0 +1,7 @@
+virality_engine.log*
+engine.out
+__pycache__/
+venv/
+.venv/
+.DS_Store
+*.backup*.py
