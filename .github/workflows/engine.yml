@@ -24,13 +24,17 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      # Stages 1-4 need no ML libraries, so the runner stays small and fast.
-      - run: pip install pandas openpyxl google-api-python-client
+      # CPU-only PyTorch wheel (~200 MB instead of ~2 GB with CUDA).
+      - run: |
+          pip install pandas openpyxl google-api-python-client scikit-learn joblib
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
 
+      # Full cycle: collect + label + train + predict. Every fresh 8h video gets a
+      # probability BEFORE its 72h label exists — a true out-of-sample test.
       - name: Run one cycle
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-        run: python youtube_virality_engine.py --once --no-train
+        run: python youtube_virality_engine.py --once
 
       - name: Commit dataset
         run: |
