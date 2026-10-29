@@ -14,7 +14,7 @@
                                   deliberately NOT used as model input).
    STAGE 4  LABEL    (age 72h)    "The Teacher" applies the ground-truth rule
                                   and writes is_viral = 1 / 0.
-   STAGE 5  TRAIN    (every cycle) "The Student" — a PyTorch MLP (5-32-16-1)
+   STAGE 5  TRAIN    (every cycle) "The Student" — a PyTorch MLP (9-32-16-1)
                                   retrained from scratch on every labelled row.
    STAGE 6  PREDICT  (every cycle) Score videos that have just crossed the 8h
                                   mark and write the probability back to Excel.
@@ -35,7 +35,7 @@
 --------------------------------------------------------------------------------
  ZERO-DATA-LEAKAGE CONTRACT (enforced in code, not just in prose)
 --------------------------------------------------------------------------------
- The model may ONLY ever see the five columns listed in FEATURE_COLUMNS, all of
+ The model may ONLY ever see the columns listed in FEATURE_COLUMNS, all of
  which are computed strictly from the 8h observation plus static metadata known
  at upload time. The 24h columns and every *_72h / final_* column are physically
  excluded by `assert_no_leakage()`, which raises at runtime if anyone ever adds a
@@ -89,8 +89,8 @@ try:
     import joblib
     import torch
     import torch.nn as nn
-    from sklearn.metrics import (accuracy_score, f1_score, precision_score,
-                                 recall_score, roc_auc_score)
+    from sklearn.metrics import (accuracy_score, average_precision_score, f1_score,
+                                 precision_score, recall_score, roc_auc_score)
     from sklearn.model_selection import train_test_split
     from sklearn.preprocessing import StandardScaler
     ML_AVAILABLE = True
@@ -192,11 +192,21 @@ SEARCH_SEEDS: List[str] = [
 #  All are derived from the 8h observation or from metadata known at upload time.
 # ------------------------------------------------------------------------------
 FEATURE_COLUMNS: List[str] = [
-    "views_per_minute",    # views_8h / measured age in minutes at the 8h check
-    "likes_per_view",      # likes_8h / views_8h
-    "comments_per_view",   # comments_8h / views_8h
-    "title_length",        # characters in the title (static, upload-time)
-    "tags_count",          # number of tags (static, upload-time)
+    "log_views_per_minute",  # log(1 + views_8h / measured age in minutes)
+    "likes_per_view",        # likes_8h / views_8h
+    "comments_per_view",     # comments_8h / views_8h
+    "title_length",          # characters in the title (static, upload-time)
+    "tags_count",            # number of tags (static, upload-time)
+    # --- added in v2 (computed on the fly by add_derived_features) ---
+    "log_views_per_sub_8h",  # log(1 + views_8h / subscribers): reach relative to audience
+    "log_subscribers",       # log(1 + subscribers at discovery): channel size
+    "log_acceleration",      # log(velocity at 8h / velocity at 0-2h): is it speeding up?
+    "log_duration",          # log(1 + duration in seconds)
+]
+
+# The original five features (v1), kept so the thesis can report v1 vs v2.
+FEATURE_COLUMNS_V1: List[str] = [
+    "views_per_minute", "likes_per_view", "comments_per_view", "title_length", "tags_count",
 ]
 
 # Any column whose name matches these patterns is future information relative to
@@ -852,6 +862,30 @@ def engineer_8h_features(df: pd.DataFrame, index: int) -> None:
     # title_length and tags_count are static and were stored at ingestion time.
 
 
+def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a COPY of df with the v2 model features added.
+
+    Computed on the fly (not stored in Excel) so they apply to old rows too.
+    Inputs are only t0 / 8h information — subscribers and views_0h are captured
+    at discovery, views_8h at the 8h checkpoint — so nothing leaks from 24h/72h.
+
+    The log transforms matter: views and subscribers are heavy-tailed (a few
+    videos have 100x the median), and a StandardScaler on raw values would let
+    those few rows dominate every gradient step.
+    """
+    out = df.copy()
+    num = lambda c: pd.to_numeric(out[c], errors="coerce") if c in out else pd.Series(np.nan, index=out.index)
+    subs = num("subscribers").where(lambda x: x > 0)
+    vpm_8h = num("views_per_minute")
+    vpm_0h = num("views_0h") / num("age_minutes_0h").where(lambda x: x > 0)
+    out["log_views_per_minute"] = np.log1p(vpm_8h.clip(lower=0))
+    out["log_views_per_sub_8h"] = np.log1p((num("views_8h") / subs).clip(lower=0))
+    out["log_subscribers"] = np.log1p(subs)
+    out["log_acceleration"] = np.log((vpm_8h.clip(lower=0) + 1e-3) / (vpm_0h.clip(lower=0) + 1e-3))
+    out["log_duration"] = np.log1p(num("duration_seconds").clip(lower=0))
+    return out
+
+
 def track_checkpoint(client: YouTubeClient, df: pd.DataFrame,
                      checkpoint_hours: int, now: datetime) -> pd.DataFrame:
     """Refresh statistics for every row that has reached `checkpoint_hours`."""
@@ -1032,7 +1066,7 @@ def build_network(input_dim: int, hidden_1: int, hidden_2: int, dropout: float):
     """Construct the virality network. Defined inside a function because its base
     class, nn.Module, only exists once PyTorch has been imported (see ML_AVAILABLE).
 
-    A deliberately small MLP: 5 -> 32 -> 16 -> 1 (logit).
+    A deliberately small MLP: 9 -> 32 -> 16 -> 1 (logit).
 
     Why this shape: with a few hundred labelled rows and five features, anything
     deeper memorises the training set. Dropout + weight decay + early stopping do
@@ -1113,7 +1147,8 @@ def build_training_frame(df: pd.DataFrame) -> pd.DataFrame:
         & (df["stage_8h_status"].astype(str) == STATUS_OK)
         & df["views_per_minute"].notna()
     )
-    frame = df.loc[eligible, FEATURE_COLUMNS].copy()
+    derived = add_derived_features(df.loc[eligible])
+    frame = derived[FEATURE_COLUMNS].copy()
     frame[TARGET_COLUMN] = labels.loc[eligible].astype(int)
     return frame
 
@@ -1263,8 +1298,14 @@ def train_model(df: pd.DataFrame) -> Optional[Dict[str, Any]]:
         # ROC-AUC is undefined when the validation split is single-class.
         "val_roc_auc": (round(float(roc_auc_score(y_val_int, val_probs)), 4)
                         if len(np.unique(y_val_int)) > 1 else None),
+        # PR-AUC is the honest headline metric for a rare positive class: a model
+        # that says "not viral" to everything gets a PR-AUC equal to the base rate.
+        "val_pr_auc": (round(float(average_precision_score(y_val_int, val_probs)), 4)
+                       if len(np.unique(y_val_int)) > 1 else None),
+        "base_rate": round(float(positives / n_rows), 4),
         "features": FEATURE_COLUMNS,
     }
+    metrics.update(cross_validated_baselines(frame))
     LOG.info("STAGE 5 | Validation — acc %.3f | prec %.3f | rec %.3f | f1 %.3f | auc %s",
              metrics["val_accuracy"], metrics["val_precision"], metrics["val_recall"],
              metrics["val_f1"], metrics["val_roc_auc"])
@@ -1279,6 +1320,46 @@ def train_model(df: pd.DataFrame) -> Optional[Dict[str, Any]]:
     }
     persist_artefacts(artefacts)
     return artefacts
+
+
+def cross_validated_baselines(frame: pd.DataFrame, folds: int = 5) -> Dict[str, Any]:
+    """5-fold stratified CV of simple baselines, for the thesis comparison table.
+
+    A single 80/20 split on a few hundred rows (with ~25 positives) is noisy, so
+    the baselines are cross-validated. The neural network must beat these to
+    justify its existence:
+      * logreg_v2   — logistic regression on the current (v2) features
+      * views_per_sub_only — one feature: early reach relative to audience size
+    """
+    try:
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.model_selection import StratifiedKFold, cross_val_predict
+        from sklearn.pipeline import make_pipeline
+    except ImportError:
+        return {}
+    y = frame[TARGET_COLUMN].astype(int).to_numpy()
+    if min(int(y.sum()), int(len(y) - y.sum())) < folds:
+        return {}
+    cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=CFG.random_seed)
+    results: Dict[str, Any] = {}
+    candidates = {
+        "logreg_v2": FEATURE_COLUMNS,
+        "views_per_sub_only": ["log_views_per_sub_8h"],
+    }
+    for name, columns in candidates.items():
+        X = frame[columns].astype(float).replace([np.inf, -np.inf], np.nan)
+        X = X.fillna(X.median()).fillna(0.0).to_numpy()
+        model = make_pipeline(StandardScaler(),
+                              LogisticRegression(class_weight="balanced", max_iter=2000))
+        probs = cross_val_predict(model, X, y, cv=cv, method="predict_proba")[:, 1]
+        preds = (probs >= 0.5).astype(int)
+        results[f"cv_{name}_roc_auc"] = round(float(roc_auc_score(y, probs)), 4)
+        results[f"cv_{name}_pr_auc"] = round(float(average_precision_score(y, probs)), 4)
+        results[f"cv_{name}_f1"] = round(float(f1_score(y, preds, zero_division=0)), 4)
+    LOG.info("STAGE 5 | CV baselines — logreg v2 ROC-AUC %s / PR-AUC %s | views/subs only ROC-AUC %s",
+             results.get("cv_logreg_v2_roc_auc"), results.get("cv_logreg_v2_pr_auc"),
+             results.get("cv_views_per_sub_only_roc_auc"))
+    return results
 
 
 def persist_artefacts(artefacts: Dict[str, Any]) -> None:
@@ -1339,7 +1420,7 @@ def predict_pending(df: pd.DataFrame, artefacts: Dict[str, Any], now: datetime) 
     medians = artefacts["medians"]
     device = artefacts["device"]
 
-    X = df.loc[indices, FEATURE_COLUMNS].astype(float).to_numpy()
+    X = add_derived_features(df.loc[indices])[FEATURE_COLUMNS].astype(float).to_numpy()
     X = np.where(np.isfinite(X), X, np.nan)
     X = np.where(np.isnan(X), medians, X)     # same medians as training — no refit
     X_scaled = scaler.transform(X)
@@ -1484,7 +1565,8 @@ def self_test() -> bool:
         return int(reach and not np.isnan(eng) and eng >= CFG.viral_engagement_ratio)
 
     check("30k views / 1k subs / 3% eng -> viral", rule(30_000, 1_000, 800, 100) == 1)
-    check("30k views / 1k subs / 0.5% eng -> not viral", rule(30_000, 1_000, 100, 50) == 0)
+    check("30k views / 1k subs / 0.5% eng -> viral (>= 0.3%)", rule(30_000, 1_000, 100, 50) == 1)
+    check("30k views / 1k subs / 0.17% eng -> not viral", rule(30_000, 1_000, 40, 10) == 0)
     check("2k views / 1k subs / 5% eng -> not viral", rule(2_000, 1_000, 90, 10) == 0)
 
     # --- leakage guard ---
