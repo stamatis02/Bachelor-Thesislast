@@ -522,7 +522,11 @@ class YouTubeClient:
         params: Dict[str, Any] = {
             "part": "id",
             "type": "video",
-            "order": "date",
+            # "viewCount", not "date": ordering by date returns videos uploaded
+            # minutes ago with ~0 views, so ~99% failed the 300-view gate
+            # (200 screened -> 2 kept). Within the same 0-2h window, ordering by
+            # views surfaces the uploads that already have traction.
+            "order": "viewCount",
             "maxResults": min(50, max_results),
             "publishedAfter": to_iso(published_after),
             "publishedBefore": to_iso(published_before),
