@@ -1,97 +1,97 @@
-# Πρόβλεψη Viral Βίντεο στο YouTube με Τεχνικές Βαθιάς Μάθησης
+# Predicting Virality of YouTube Videos with Deep Learning Techniques
 
-Πτυχιακή εργασία, Τμήμα Πληροφορικής — **Σταμάτης Ψαρός**
+Bachelor's Thesis, Computer Science — **Stamatis Psaros**
 
-Ένα αυτόνομο σύστημα που εντοπίζει καινούργια βίντεο στο YouTube, τα παρακολουθεί για 3 μέρες και εκπαιδεύει ένα νευρωνικό δίκτυο (PyTorch). Στόχος είναι να προβλέπει **από τις πρώτες 8 ώρες** αν ένα βίντεο θα γίνει viral.
+An autonomous pipeline that discovers brand-new YouTube videos, tracks them for 3 days, and trains a PyTorch neural network to predict **from the first 8 hours** whether a video will go viral.
 
 ---
 
-## Πώς λειτουργεί
+## How it works
 
-Κάθε 2 ώρες τρέχει ένας κύκλος με 6 στάδια:
+Every 2 hours, one cycle runs through 6 stages:
 
-| Στάδιο | Πότε | Τι κάνει |
+| Stage | When | What it does |
 |---|---|---|
-| **1. Ingest** | 0–2 ώρες | Βρίσκει καινούργια βίντεο (όχι Shorts) που έχουν ήδη αρχίσει να μαζεύουν views |
-| **2. Track** | 8 ώρες | Καταγράφει views, likes και σχόλια. Από αυτά βγαίνουν τα features του μοντέλου |
-| **3. Track** | 24 ώρες | Καταγραφή μόνο για ανάλυση (το μοντέλο **δεν** τη χρησιμοποιεί) |
-| **4. Label** | 72 ώρες | Ο «δάσκαλος» βάζει την ετικέτα: viral = 1 ή 0 |
-| **5. Train** | κάθε κύκλο | Ο «μαθητής» (νευρωνικό δίκτυο) εκπαιδεύεται από την αρχή σε όλα τα δεδομένα με ετικέτα |
-| **6. Predict** | κάθε κύκλο | Δίνει πιθανότητα viral σε κάθε βίντεο που μόλις έκλεισε 8 ώρες, **πριν** υπάρξει η πραγματική ετικέτα |
+| **1. Ingest** | 0–2 h | Discovers new non-Short videos that are already gaining views |
+| **2. Track** | 8 h | Records views, likes and comments. The model features are computed here |
+| **3. Track** | 24 h | Recorded for analysis only (**not** used by the model) |
+| **4. Label** | 72 h | "The Teacher" assigns the ground truth: viral = 1 or 0 |
+| **5. Train** | every cycle | "The Student" (neural network) is retrained from scratch on all labelled rows |
+| **6. Predict** | every cycle | Scores every video that just reached 8 h, **before** its real label exists |
 
-### Ορισμός viral
+### Definition of viral
 
-Ένα βίντεο θεωρείται viral όταν στις 72 ώρες ισχύουν **και τα δύο**:
+A video is labelled viral when, at 72 hours, **both** conditions hold:
 
-- **Απήχηση:** views ≥ 3 × subscribers του καναλιού. Δηλαδή το βίντεο ξέφυγε από το υπάρχον κοινό του.
-- **Γνήσιο ενδιαφέρον:** (likes + σχόλια) / views ≥ 0.3%. Αυτό κόβει βίντεο με ψεύτικα views από bots.
+- **Reach:** views ≥ 3 × channel subscribers. The video spread beyond its existing audience.
+- **Genuine engagement:** (likes + comments) / views ≥ 0.3%. This filters out bot-inflated views.
 
-> Το όριο engagement ήταν αρχικά 2%. Μειώθηκε στο 0.3% επειδή τα πραγματικά viral βίντεο τα βλέπουν κυρίως άγνωστοι, που σπάνια κάνουν like ή σχόλιο. Με όριο 2% απορρίπτονταν 30 από τα 37 βίντεο που είχαν πετύχει τον στόχο απήχησης.
+> The engagement threshold was originally 2%. It was lowered to 0.3% because truly viral videos are watched mostly by non-subscribers, who rarely like or comment. At 2%, 30 of the 37 videos that hit the reach target were rejected.
 
-### Features του μοντέλου (όλα γνωστά στις 8 ώρες)
+### Model features (all known at the 8-hour mark)
 
-| Feature | Τι μετράει |
+| Feature | Meaning |
 |---|---|
-| `log_views_per_minute` | Ταχύτητα: views ανά λεπτό στις 8 ώρες |
+| `log_views_per_minute` | Velocity: views per minute at 8 h |
 | `likes_per_view` | Likes / views |
-| `comments_per_view` | Σχόλια / views |
-| `title_length` | Μήκος τίτλου |
-| `tags_count` | Πλήθος tags |
-| `log_views_per_sub_8h` | Views στις 8 ώρες σε σχέση με τους subscribers |
-| `log_subscribers` | Μέγεθος καναλιού |
-| `log_acceleration` | Επιταχύνει ή φρενάρει το βίντεο από τις 0–2 ώρες μέχρι τις 8 ώρες |
-| `log_duration` | Διάρκεια βίντεο |
+| `comments_per_view` | Comments / views |
+| `title_length` | Title length in characters |
+| `tags_count` | Number of tags |
+| `log_views_per_sub_8h` | Views at 8 h relative to channel subscribers |
+| `log_subscribers` | Channel size |
+| `log_acceleration` | Whether the video is speeding up or slowing down between 0–2 h and 8 h |
+| `log_duration` | Video duration |
 
-**Μηδενική διαρροή δεδομένων:** ο κώδικας ελέγχει σε κάθε εκπαίδευση (`assert_no_leakage`) ότι κανένα feature δεν προέρχεται από τις 24 ή τις 72 ώρες. Αν μπει κατά λάθος τέτοιο feature, το πρόγραμμα σταματάει.
+**Zero data leakage:** on every training run the code checks (`assert_no_leakage`) that no feature comes from the 24 h or 72 h observations. If one is ever added by mistake, the program stops.
 
-### Μοντέλο
+### Model
 
-- **Νευρωνικό δίκτυο (MLP):** 9 → 32 → 16 → 1, με BatchNorm, Dropout, weight decay και early stopping.
-- **Ανισορροπία κλάσεων:** τα viral είναι λίγα (~8%), οπότε χρησιμοποιείται `pos_weight` στο loss.
-- **Σύγκριση (baselines):** σε κάθε εκπαίδευση υπολογίζεται με 5-fold cross-validation και μια λογιστική παλινδρόμηση, ώστε να φαίνεται αν το νευρωνικό προσφέρει κάτι παραπάνω.
+- **Neural network (MLP):** 9 → 32 → 16 → 1, with BatchNorm, Dropout, weight decay and early stopping.
+- **Class imbalance:** viral videos are rare (~8%), so the loss uses `pos_weight`.
+- **Baselines:** every training run also evaluates a logistic regression with 5-fold cross-validation, to show whether the neural network adds value beyond a simple model.
 
 ---
 
-## Αρχεία του repo
+## Repository contents
 
-| Αρχείο | Τι είναι |
+| File | Description |
 |---|---|
-| `youtube_virality_engine.py` | Όλο το σύστημα σε ένα αρχείο |
-| `youtube_predictive_datasetss.xlsx` | Το dataset. Ενημερώνεται αυτόματα σε κάθε κύκλο |
-| `models/metrics.json` | Τα αποτελέσματα της τελευταίας εκπαίδευσης |
-| `models/metrics_history.jsonl` | Ιστορικό αποτελεσμάτων, για γραφήματα εξέλιξης |
-| `models/virality_net.pt`, `preprocessor.joblib` | Το εκπαιδευμένο μοντέλο |
-| `last_cycle.log` | Το ημερολόγιο του τελευταίου κύκλου |
-| `.github/workflows/engine.yml` | Οι οδηγίες για το αυτόματο τρέξιμο στο GitHub Actions |
-| `requirements.txt` | Οι βιβλιοθήκες Python που χρειάζονται |
+| `youtube_virality_engine.py` | The entire pipeline in a single file |
+| `youtube_predictive_datasetss.xlsx` | The dataset, updated automatically every cycle |
+| `models/metrics.json` | Results of the latest training run |
+| `models/metrics_history.jsonl` | History of results, for plotting progress over time |
+| `models/virality_net.pt`, `preprocessor.joblib` | The trained model |
+| `last_cycle.log` | Log of the most recent cycle |
+| `.github/workflows/engine.yml` | GitHub Actions workflow for automated runs |
+| `requirements.txt` | Python dependencies |
 
 ---
 
-## Αυτόματη λειτουργία
+## Automation
 
-- Ο κώδικας τρέχει στο **GitHub Actions**. Ο υπολογιστής δεν χρειάζεται να είναι ανοιχτός.
-- Το **cron-job.org** ξεκινάει το workflow κάθε 2 ώρες μέσω του GitHub API. Το ενσωματωμένο `schedule` του GitHub δεν χρησιμοποιείται, γιατί στους δωρεάν λογαριασμούς έτρεχε μόνο κάθε 6–8 ώρες.
-- Μετά από κάθε κύκλο, το ενημερωμένο dataset και το μοντέλο ανεβαίνουν αυτόματα στο repo με ένα commit `cycle <ημερομηνία>`.
-- Το κλειδί του YouTube API φυλάσσεται ως GitHub Secret (`YOUTUBE_API_KEY`) και δεν υπάρχει μέσα στον κώδικα.
+- The pipeline runs on **GitHub Actions**, so no local machine needs to stay on.
+- **cron-job.org** triggers the workflow every 2 hours through the GitHub API. GitHub's built-in `schedule` is not used: on free accounts it only fired every 6–8 hours.
+- After each cycle, the updated dataset and model are committed back to the repo as `cycle <timestamp>`.
+- The YouTube API key is stored as a GitHub Secret (`YOUTUBE_API_KEY`) and is never in the code.
 
 ---
 
-## Τοπική εκτέλεση
+## Running locally
 
 ```bash
 pip install -r requirements.txt
-export YOUTUBE_API_KEY="το_κλειδί_σου"
+export YOUTUBE_API_KEY="your_key_here"
 
-python youtube_virality_engine.py --once            # ένας κύκλος
-python youtube_virality_engine.py                   # συνεχής λειτουργία (κάθε 2 ώρες)
-python youtube_virality_engine.py --once --no-train # μόνο συλλογή δεδομένων
-python youtube_virality_engine.py --self-test       # έλεγχος λογικής χωρίς API
+python youtube_virality_engine.py --once            # single cycle
+python youtube_virality_engine.py                   # run forever (every 2 hours)
+python youtube_virality_engine.py --once --no-train # data collection only
+python youtube_virality_engine.py --self-test       # offline logic check, no API needed
 ```
 
 ---
 
-## Περιορισμοί
+## Limitations
 
-- **Δείγμα:** βίντεο από κανάλια με 500–300.000 subscribers, που έχουν ήδη αρχίσει να μαζεύουν views στις πρώτες 2 ώρες. Δεν αντιπροσωπεύει όλο το YouTube.
-- **YouTube API quota:** 10.000 μονάδες τη μέρα. Αυτό περιορίζει πόσα βίντεο μπορούν να συλλεχθούν.
-- **Χρόνος:** κάθε βίντεο χρειάζεται 3 μέρες μέχρι να πάρει ετικέτα, άρα το dataset μεγαλώνει σταδιακά.
+- **Sample:** videos from channels with 500–300,000 subscribers that already show traction in their first 2 hours. Not representative of all of YouTube.
+- **YouTube API quota:** 10,000 units per day, which limits how many videos can be collected.
+- **Time:** each video needs 3 days before it gets a label, so the dataset grows gradually.
