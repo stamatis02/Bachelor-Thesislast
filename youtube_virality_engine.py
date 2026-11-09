@@ -146,7 +146,7 @@ class Config:
     # A cycle runs every 2h, so a checkpoint can never be observed at the exact
     # second. `grace_hours` is how late an observation may be and still count.
     checkpoint_hours: Tuple[int, int, int] = (8, 24, 72)
-    grace_hours: float = 24.0                   # >3h late -> checkpoint MISSED
+    grace_hours: float = 24.0                   # >24h late -> checkpoint MISSED
 
     # ---------- Stage 4: ground-truth rule ("The Teacher") ----------
     viral_views_multiplier: float = 3.0          # final_views >= 3 * subscribers
