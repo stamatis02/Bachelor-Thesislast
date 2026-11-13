@@ -1,11 +1,11 @@
 {
-  "trained_at": "2026-11-13T00:11:40Z",
+  "trained_at": "2026-11-13T02:11:29Z",
   "n_train": 1592,
   "n_val": 398,
   "n_total_labelled": 1990,
   "positives": 219,
   "negatives": 1771,
-  "best_val_loss": 0.33405,
+  "best_val_loss": 0.33404,
   "val_accuracy": 0.9095,
   "val_precision": 0.5513,
   "val_recall": 0.9773,
