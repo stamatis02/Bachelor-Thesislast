@@ -1,34 +1,33 @@
-2026-11-16 22:11:13 | INFO    | Engine online. Dataset=/home/runner/work/Bachelor-Thesislast/Bachelor-Thesislast/youtube_predictive_datasetss.xlsx | cycle=7200s | features=['log_views_per_minute', 'likes_per_view', 'comments_per_view', 'title_length', 'tags_count', 'log_views_per_sub_8h', 'log_subscribers', 'log_acceleration', 'log_duration']
-2026-11-16 22:11:13 | INFO    | ==============================================================================
-2026-11-16 22:11:13 | INFO    | CYCLE START | 2026-11-16T22:11:13Z
-2026-11-16 22:11:13 | INFO    | ==============================================================================
-2026-11-16 22:11:15 | INFO    | STAGE 1 | Ingesting brand-new videos (0-2h old)...
-2026-11-16 22:11:15 | DEBUG   |   seed 'news' -> 50 ids (50 new)
-2026-11-16 22:11:16 | DEBUG   |   seed 'review' -> 50 ids (50 new)
-2026-11-16 22:11:16 | DEBUG   |   seed 'vlog' -> 50 ids (50 new)
-2026-11-16 22:11:16 | DEBUG   |   seed 'highlights' -> 50 ids (50 new)
-2026-11-16 22:11:17 | DEBUG   |   fetched details for 200/200 candidates
-2026-11-16 22:11:17 | INFO    | STAGE 1 | Ingested 16 new videos (200 candidates screened). Dataset: 3373 rows.
-2026-11-16 22:11:19 | DEBUG   | Dataset saved (3373 rows).
-2026-11-16 22:11:19 | INFO    | STAGE 2/3 | Refreshing 10 videos at the 8h mark (1 batched calls).
-2026-11-16 22:11:19 | INFO    | STAGE 2/3 | 8h checkpoint: 10 updated, 0 dead.
-2026-11-16 22:11:21 | DEBUG   | Dataset saved (3373 rows).
-2026-11-16 22:11:22 | INFO    | STAGE 2/3 | Refreshing 10 videos at the 24h mark (1 batched calls).
-2026-11-16 22:11:22 | INFO    | STAGE 2/3 | 24h checkpoint: 10 updated, 0 dead.
-2026-11-16 22:11:24 | DEBUG   | Dataset saved (3373 rows).
-2026-11-16 22:11:24 | INFO    | STAGE 4 | Labelled 23 rows -> 2 viral / 21 non-viral (1 dead).
-2026-11-16 22:11:26 | DEBUG   | Dataset saved (3373 rows).
-2026-11-16 22:11:27 | INFO    | STAGE 5 | Training on 2504 rows (254 viral / 2250 non-viral), pos_weight=8.87, device=cpu
-2026-11-16 22:11:30 | DEBUG   |   epoch  50 | train 0.3119 | val 0.2807
-2026-11-16 22:11:32 | DEBUG   |   epoch 100 | train 0.3260 | val 0.2588
-2026-11-16 22:11:34 | INFO    |   Early stopping at epoch 132 (best val loss 0.2459).
-2026-11-16 22:11:34 | INFO    | STAGE 5 | CV baselines — logreg v2 ROC-AUC 0.9667 / PR-AUC 0.6566 | views/subs only ROC-AUC 0.9567
-2026-11-16 22:11:34 | INFO    | STAGE 5 | Validation — acc 0.930 | prec 0.598 | rec 0.961 | f1 0.737 | auc 0.9841
-2026-11-16 22:11:34 | DEBUG   | Artefacts persisted to /home/runner/work/Bachelor-Thesislast/Bachelor-Thesislast/models
-2026-11-16 22:11:34 | INFO    | STAGE 6 | Scored 10 videos — 1 flagged as likely viral (mean p=0.103).
-2026-11-16 22:11:36 | DEBUG   | Dataset saved (3373 rows).
-2026-11-16 22:11:36 | INFO    | ------------------------------------------------------------------------------
-2026-11-16 22:11:36 | INFO    | DASHBOARD | rows=3373 | pending=852 | labelled=2521 (viral=258, 10.2%) | scored=2817
-2026-11-16 22:11:36 | INFO    | DASHBOARD | quota used=409/10000 units
-2026-11-16 22:11:36 | INFO    | ------------------------------------------------------------------------------
-2026-11-16 22:11:36 | INFO    | Exiting after a single cycle.
+2026-11-17 00:11:20 | INFO    | Engine online. Dataset=/home/runner/work/Bachelor-Thesislast/Bachelor-Thesislast/youtube_predictive_datasetss.xlsx | cycle=7200s | features=['log_views_per_minute', 'likes_per_view', 'comments_per_view', 'title_length', 'tags_count', 'log_views_per_sub_8h', 'log_subscribers', 'log_acceleration', 'log_duration']
+2026-11-17 00:11:20 | INFO    | ==============================================================================
+2026-11-17 00:11:20 | INFO    | CYCLE START | 2026-11-17T00:11:20Z
+2026-11-17 00:11:20 | INFO    | ==============================================================================
+2026-11-17 00:11:21 | INFO    | STAGE 1 | Ingesting brand-new videos (0-2h old)...
+2026-11-17 00:11:21 | DEBUG   |   seed 'story' -> 50 ids (50 new)
+2026-11-17 00:11:22 | DEBUG   |   seed 'vlog' -> 50 ids (50 new)
+2026-11-17 00:11:22 | DEBUG   |   seed 'interview' -> 50 ids (50 new)
+2026-11-17 00:11:23 | DEBUG   |   seed 'analysis' -> 50 ids (50 new)
+2026-11-17 00:11:24 | DEBUG   |   fetched details for 200/200 candidates
+2026-11-17 00:11:24 | INFO    | STAGE 1 | Ingested 21 new videos (200 candidates screened). Dataset: 3394 rows.
+2026-11-17 00:11:26 | DEBUG   | Dataset saved (3394 rows).
+2026-11-17 00:11:26 | INFO    | STAGE 2/3 | Refreshing 2 videos at the 8h mark (1 batched calls).
+2026-11-17 00:11:26 | INFO    | STAGE 2/3 | 8h checkpoint: 2 updated, 0 dead.
+2026-11-17 00:11:28 | DEBUG   | Dataset saved (3394 rows).
+2026-11-17 00:11:28 | INFO    | STAGE 2/3 | Refreshing 7 videos at the 24h mark (1 batched calls).
+2026-11-17 00:11:28 | INFO    | STAGE 2/3 | 24h checkpoint: 7 updated, 0 dead.
+2026-11-17 00:11:31 | DEBUG   | Dataset saved (3394 rows).
+2026-11-17 00:11:31 | INFO    | STAGE 4 | Labelled 9 rows -> 1 viral / 8 non-viral (3 dead).
+2026-11-17 00:11:33 | DEBUG   | Dataset saved (3394 rows).
+2026-11-17 00:11:34 | INFO    | STAGE 5 | Training on 2513 rows (255 viral / 2258 non-viral), pos_weight=8.85, device=cpu
+2026-11-17 00:11:36 | DEBUG   |   epoch  50 | train 0.2830 | val 0.3055
+2026-11-17 00:11:37 | INFO    |   Early stopping at epoch 67 (best val loss 0.2662).
+2026-11-17 00:11:37 | INFO    | STAGE 5 | CV baselines — logreg v2 ROC-AUC 0.9672 / PR-AUC 0.6635 | views/subs only ROC-AUC 0.9571
+2026-11-17 00:11:37 | INFO    | STAGE 5 | Validation — acc 0.926 | prec 0.581 | rec 0.980 | f1 0.730 | auc 0.9797
+2026-11-17 00:11:37 | DEBUG   | Artefacts persisted to /home/runner/work/Bachelor-Thesislast/Bachelor-Thesislast/models
+2026-11-17 00:11:37 | INFO    | STAGE 6 | Scored 2 videos — 1 flagged as likely viral (mean p=0.380).
+2026-11-17 00:11:39 | DEBUG   | Dataset saved (3394 rows).
+2026-11-17 00:11:39 | INFO    | ------------------------------------------------------------------------------
+2026-11-17 00:11:39 | INFO    | DASHBOARD | rows=3394 | pending=864 | labelled=2530 (viral=259, 10.2%) | scored=2819
+2026-11-17 00:11:39 | INFO    | DASHBOARD | quota used=409/10000 units
+2026-11-17 00:11:39 | INFO    | ------------------------------------------------------------------------------
+2026-11-17 00:11:39 | INFO    | Exiting after a single cycle.
